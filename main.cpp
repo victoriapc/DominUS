@@ -6,99 +6,131 @@ Description: Programmation des parcours suivies par le robot
 Date: 03-11-18
 */
 
-/* ****************************************************************************
-Inclure les librairies de functions que vous voulez utiliser
-**************************************************************************** */
 
+// librairies
 #include <LibRobus.h> // Essentielle pour utiliser RobUS
 #include <arduino.h>
-
-
-/* ****************************************************************************
-Variables globales et defines
-**************************************************************************** */
+#include <QTRSensors.h>
+#include <ADJDS311.h>
+#include <math.h>
 
 #define domino_drop 1000
 const float distance_dominos_reelle = 2;
 
 const long pulses = 3200;
-#define buttonPin1 53
-#define buttonPin2 54
-#define buttonPin3 55
-#define GoPin 56
+#define bouton_ligne 51
+#define bouton_droite 49
+#define bouton_gauche 47
+#define bouton_spirale 45
+#define bouton_Scarree 43
+#define bouton_go 41
+#define del_ligne 39
+#define del_droite 37
+#define del_gauche 35
+#define del_spirale 33
+#define del_carre 31
+#define del_go 30
+
 const float circonferenceRoue = 24.19;
 const float circonferenceCercleUneRoue = 116.43; 
 const float circonferenceCercleDeuxRoues = 58.119; 
 const float Kp = 0.000003, Ki = 0.0000006; //facteurs de correction a modifier selon comportement
 //augmenter si correction trop petite et vice-versa tout en respectant le plus possible la relation Kp = 5Ki
 
-/* ****************************************************************************
-Vos propres fonctions sont creees ici
-**************************************************************************** */
 
+void PlacerDomino(){
+  const int Servo1AngleMax = 170;//165
+  const int Servo1AngleMin = 87;
+  const int Servo0AngleMax = 180;
+  const int Servo0AngleMin = 88;
+  SERVO_SetAngle(0,Servo0AngleMax);
+  delay(900);
+  SERVO_SetAngle(1,Servo1AngleMax);
+  SERVO_SetAngle(0,Servo0AngleMin);
+  delay(550);
+  SERVO_SetAngle(1,Servo1AngleMin);
+  delay(100);
+}
 
-void asservissement(float nbDominos){
-  const float DISTANCE = 2.00; //changer la valeur pour distance entre deux dominos
-  const int DUREE = 1000; //temps/dominos place, ici 1 sec, changer selon tests
-  int i = 0; //compteur pour integrer la derniere erreur lue
-  float dist_roue_droite = 0;
-  float dist_roue_gauche = 0; //distance parcourue par les roues par cycle
-  float dist_roue_droite_totale = 0;
-  float dist_roue_gauche_totale = 0; //distance totale parcourue par les roues
-  float vit_droite = 1.1;
-  float vit_gauche = 1.15; //initialisation des vitesse des moteurs
-  //A remarquer ici que ces vitesses seront ajustes jusqu'a ce qu'elles atteignent distance/duree (cm/us)
-
+void asservissement(float vit_droite, float vit_gauche, float const DISTANCEd, float const DISTANCEg, int const nb_dominos){
+  int nb_dominos_place = 0;
   float totale_ENCODER_read_right = 0;
   float totale_ENCODER_read_left = 0;
+  float dist_roue_droite = 0, dist_roue_gauche = 0;
+  float dist_roue_droite_totale = 0, dist_roue_gauche_totale = 0;
   float erreur_droite = 0;
   float erreur_gauche = 0;
   float erreur_droite_totale = 0;
   float erreur_gauche_totale = 0;
+  const int DUREE_DOMINOS_DROP = 500;
+
+  const float Kp = 0.000046875; float Ki = Kp/5; //facteurs de correction a modifier selon comportement
+  //augmenter si correction trop petite et vice-versa tout en respectant le plus possible la relation Kp = 5Ki
+  // SOFT_TIMER_Update(); // A decommenter pour utiliser des compteurs logiciels
   
-  while (i < nbDominos){
-  ENCODER_ReadReset(RIGHT); ENCODER_ReadReset(LEFT);
+  while(nb_dominos_place < nb_dominos){
 
-  MOTOR_SetSpeed(1, vit_droite); 
-  MOTOR_SetSpeed(0, vit_gauche);
-  delay(DUREE);
+    delay(10);// Delais pour décharger le CPU
+    int i = 0;
 
-  dist_roue_droite = (circonferenceRoue/3200)*ENCODER_Read(RIGHT);
-  dist_roue_gauche = (circonferenceRoue/3200)*ENCODER_Read(LEFT);
+    while (i < 5){
+      ENCODER_ReadReset(RIGHT); ENCODER_ReadReset(LEFT);
 
-  dist_roue_droite_totale = (circonferenceRoue/3200)*totale_ENCODER_read_right;
-  dist_roue_gauche_totale = (circonferenceRoue/3200)*totale_ENCODER_read_left;
-  
-  totale_ENCODER_read_right += ENCODER_Read(RIGHT);
-  totale_ENCODER_read_left += ENCODER_Read(LEFT);
+      MOTOR_SetSpeed(RIGHT, vit_droite); MOTOR_SetSpeed(LEFT, vit_gauche);
+      delay(100);
 
-  erreur_droite = DISTANCE - dist_roue_droite;
-  erreur_gauche = DISTANCE - dist_roue_gauche;
-  erreur_droite_totale = DISTANCE*i - dist_roue_droite_totale;
-  erreur_gauche_totale = DISTANCE*i - dist_roue_gauche_totale;
+      totale_ENCODER_read_right += ENCODER_Read(RIGHT); totale_ENCODER_read_left += ENCODER_Read(LEFT);
+      
+      dist_roue_droite = (circonferenceRoue/3200)*ENCODER_Read(RIGHT);
+      dist_roue_gauche = (circonferenceRoue/3200)*ENCODER_Read(LEFT);
 
-  vit_droite *= (erreur_droite*Ki + erreur_droite_totale*Kp);
-  vit_gauche *= (erreur_gauche*Ki + erreur_gauche_totale*Kp);
+      dist_roue_droite_totale = (circonferenceRoue/3200)*totale_ENCODER_read_right;
+      dist_roue_gauche_totale = (circonferenceRoue/3200)*totale_ENCODER_read_left;
 
-  i++;
+      erreur_droite = DISTANCEd - dist_roue_droite;
+      erreur_gauche = DISTANCEg - dist_roue_gauche;
+      erreur_droite_totale = DISTANCEd*i - dist_roue_droite_totale;
+      erreur_gauche_totale = DISTANCEg*i - dist_roue_gauche_totale;
+
+      vit_droite *=(1 + (erreur_droite*Kp + erreur_droite_totale*Ki));
+      vit_gauche *= (1 + (erreur_gauche*Kp + erreur_gauche_totale*Ki));
+      
+      i++;
+    }
+
+    MOTOR_SetSpeed(RIGHT, 0); MOTOR_SetSpeed(LEFT, 0);
+    nb_dominos_place++;
+
+    Serial.print(dist_roue_gauche); Serial.print('/'); Serial.println(dist_roue_droite);
+
+    delay(DUREE_DOMINOS_DROP);
+    PlacerDomino();
   }
 }
 
-void ligne_droite(float dominos){ // nombre de dominos a placer
+void ligne_droite(){ 
+ asservissement(0.1, 0.112, 0.40, 0.40, 27);
+}
 
-  long distance_dominos_encodeur = (distance_dominos_reelle)/circonferenceRoue * pulses; // distance entre 2 dominos
-  long distance_parcours = distance_dominos_reelle; // compteur pour la ligne
-  while (distance_parcours <= (dominos*5)){ //boucle pour compteur de dominos -> distance totale
-    ENCODER_ReadReset(0);
-    ENCODER_ReadReset(1);
-    while (ENCODER_Read(0) < distance_dominos_encodeur){  //boucle entre 2 dominos (asservissement)
-      asservissement(dominos);
-    }
-    MOTOR_SetSpeed(1, 0);
-    MOTOR_SetSpeed(0, 0);
-    delay(domino_drop);    // temps pour placer les dominos
-    distance_parcours += distance_dominos_reelle;
+void tourner_90(int sens){
+  if (sens == RIGHT)
+  {
+    asservissement(0.05, 0.1, 0.50, 2.00, 15);
   }
+
+  if (sens == LEFT)
+  {
+    asservissement(0.1, 0.05, 2.00, 0.50, 15);
+  }
+}
+
+void tourner90(){
+  MOTOR_SetSpeed(0,0.1);
+  MOTOR_SetSpeed(1,0.2);
+  delay(500);
+  MOTOR_SetSpeed(0,0);
+  MOTOR_SetSpeed(1,0);
+  PlacerDomino();
 }
 
 /*void parcours(int deplacement[6]){    // fonction qui fait le parcours inventé par l'utilisateur
@@ -110,102 +142,119 @@ void ligne_droite(float dominos){ // nombre de dominos a placer
       ligne_droite(20);
     }
     if (deplacement[x] == 2){
-      tourner_droite(******);
+      tourner_droite();
     }
     if (deplacement[x] == 3){
-      tourner_gauche(******);
+      tourner_gauche();
     }
     x++;
   }
 }*/
 
 
-/* ****************************************************************************
-Fonctions d'initialisation (setup)
-**************************************************************************** */
-// -> Se fait appeler au debut du programme
-// -> Se fait appeler seulement un fois
-// -> Generalement on y initilise les varibbles globales
 
 void setup(){
   BoardInit();
+  pinMode(del_ligne, OUTPUT);
+  pinMode(del_droite, OUTPUT);
+  pinMode(del_gauche, OUTPUT);
+  pinMode(del_spirale, OUTPUT);
+  pinMode(del_carre, OUTPUT);
+  pinMode(del_go, OUTPUT);
+
+  Serial.begin(9600);
+  
+  SERVO_Enable(0);
+  SERVO_Enable(1);
+  
 }
-
-
-/* ****************************************************************************
-Fonctions de boucle infini (loop())
-**************************************************************************** */
-// -> Se fait appeler perpetuellement suite au "setup"
 
 void loop(){
   int x = 0;
   int deplacement[6]={0,0,0,0,0};
-  int button2 = digitalRead(buttonPin2);    //bouton tourner droite
-  if (button2 == 1){
-    int go = 0;
-    for (int i=0; i<10; i++){
-      go = i;
-    }
-    if (go == 10){
+  if (digitalRead(bouton_go) == 1){
+    delay(100);                            // Debouncing
+    if (digitalRead(bouton_go) == 1){
+      Serial.println("bouton go");
+      while (digitalRead(bouton_go) == 1){
+        digitalWrite(del_go, HIGH);
+      }
       while (x<5){          // un maximum de 5 déplacements de suite
-        int button1 = digitalRead(buttonPin1);    //bouton ligne droite
-        int button2 = digitalRead(buttonPin2);    //bouton tourner droite
-        int button3 = digitalRead(buttonPin3);    //bouton tourner gauche
-
-        if (button1 == 1) {
-          int go = 0;
-          for (int i=0; i<10; i++){
-            go = i;
+        if (x == 0){
+          if (digitalRead(bouton_spirale) == 1) {
+            delay(100);                           // Debouncing
+            if (digitalRead(bouton_spirale) == 1){
+              deplacement[x] = 3;
+              Serial.println("SPIRALE");
+              x += 1;
+              while (digitalRead(bouton_spirale) == 1){       //del pour confirmer
+                digitalWrite(del_spirale, HIGH);      //allumer del
+              }
+            }
           }
-          if (go == 10){
-            deplacement[x] = 1;
-            Serial.println("LIGNE");
-            x += 1;
+          if (digitalRead(bouton_Scarree) == 1) {
+            delay(100);                           // Debouncing
+            if (digitalRead(bouton_Scarree) == 1){
+              deplacement[x] = 3;
+              Serial.println("CARRE");
+              x += 1;
+              while (digitalRead(bouton_Scarree) == 1){       //del pour confirmer
+                digitalWrite(del_carre, HIGH);      //allumer del
+              }
+            }
           }
         }
-        if (button2 == 1) {
-          int go = 0;
-          for (int i=0; i<10; i++){
-            go = i;
+        if (digitalRead(bouton_ligne) == 1) {
+            delay(100);                            // Debouncing
+            if (digitalRead(bouton_ligne) == 1){
+              deplacement[x] = 1;
+              Serial.println("LIGNE");
+              x += 1;
+              while (digitalRead(bouton_ligne) == 1){
+                digitalWrite(del_ligne, HIGH);      //allumer del
+              }
+            }
           }
-          if (go == 10){
+        if (digitalRead(bouton_droite) == 1) {
+          delay(100);                            // Debouncing
+          if (digitalRead(bouton_droite) == 1){
             deplacement[x] = 2;
             Serial.println("DROITE");
             x += 1;
+            while (digitalRead(bouton_droite) == 1){
+              digitalWrite(del_droite, HIGH);     //allumer del
+            }
           }
         }
-        if (button3 == 1) {
-          int go = 0;
-          for (int i=0; i<10; i++){
-            go = i;
-          }
-          if (go == 10){
+        if (digitalRead(bouton_gauche) == 1) {
+          delay(100);                           // Debouncing
+          if (digitalRead(bouton_gauche) == 1){
             deplacement[x] = 3;
             Serial.println("GAUCHE");
             x += 1;
+            while (digitalRead(bouton_gauche) == 1){       //del pour confirmer
+              digitalWrite(del_gauche, HIGH);     //allumer del
+            }
           }
         }
-        if (GoPin == 1){       // pour commencer le parcours avec moins de 5 déplacements
-          int go = 0;
-          for (int i=0; i<10; i++){
-            go = i;
-          }
-          if (go == 10){
-            //parcours(deplacement);
-            Serial.println("GOOOOOO");
+        if (digitalRead(bouton_go) == 1){       // pour commencer le parcours avec moins de 5 déplacements
+          delay(100);
+          if (digitalRead(bouton_go) == 1){
+            Serial.println("FIN");
+            int y = 0;
+            while (y<5){              // écrit les données dans le tableau
+              Serial.println(deplacement[y]);
+              y += 1;
+            }
+            while (digitalRead(bouton_go) == 1){
+              digitalWrite(del_go, HIGH);     //allumer del
+            }
+            delay(2000);
+            //parcours
+            Serial.println("GO");
           }
         }
       }
     }
-  Serial.println("//////////////////");
-  int y = 0;
-  while (y<5){
-    Serial.println(deplacement[y]);
-    y += 1;
   }
-  if (GoPin == 1){       // pour commencer le parcours avec 5 déplacements
-      //parcours(deplacement);
-      Serial.println("GOOOOOO");
-    }
-    ligne_droite(10);
 }
