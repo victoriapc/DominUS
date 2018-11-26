@@ -55,7 +55,54 @@ void PlacerDomino(){
   delay(100);               //petit delay avant que le robot recommence à bouger
 }
 
-void asservissement(float vit_droite, float vit_gauche, float const DISTANCEd, float const DISTANCEg, int const nb_dominos){
+void dels_on(){
+  digitalWrite(del_go, HIGH);
+  digitalWrite(del_ligne, HIGH);
+  digitalWrite(del_droite, HIGH);
+  digitalWrite(del_gauche, HIGH);
+  digitalWrite(del_spirale, HIGH);
+  digitalWrite(del_carre, HIGH);
+}
+
+void dels_off(){
+  digitalWrite(del_go, LOW);
+  digitalWrite(del_ligne, LOW);
+  digitalWrite(del_droite, LOW);
+  digitalWrite(del_gauche, LOW);
+  digitalWrite(del_spirale, LOW);
+  digitalWrite(del_carre, LOW);
+}
+int bouton_parcours(int bouton, int del){     //fonction avec debouncing et dels
+  if (digitalRead(bouton)== 1){
+    delay(50);         //debouncing
+    if (digitalRead(bouton)== 1){
+      Serial.println(bouton);
+      digitalWrite(del, HIGH);      //allume la del associée pour indiquer la sauvegarde du choix
+      while (digitalRead(bouton) == 1){   //pour que ca le prenne juste une fois le choix même si on tiens le bouton
+      }
+      delay(200);                         // si la del s'allume pas, le choix n'est pas enregistré
+      digitalWrite(del, LOW);
+      return del;                   //// le choix est enregistré et l'utilisateur comprend
+    }
+    if (digitalRead(bouton)==0){
+      return 0;
+    }
+  }
+}
+
+void arret_chargeur(){
+  MOTOR_SetSpeed(0,0);
+  MOTOR_SetSpeed(1,0);
+  dels_on();
+  while (bouton_go == 0){
+  }
+  if (bouton_go == 1){
+    dels_off();
+    bouton_parcours(bouton_go, del_go);
+  }
+}
+
+int ligne_droite(int nb_dominos, int chargeur){
   int nb_dominos_place = 0;
   float totale_ENCODER_read_right = 0;
   float totale_ENCODER_read_left = 0;
@@ -66,6 +113,10 @@ void asservissement(float vit_droite, float vit_gauche, float const DISTANCEd, f
   float erreur_droite_totale = 0;
   float erreur_gauche_totale = 0;
   const int DUREE_DOMINOS_DROP = 500;
+  float vit_droite = 0.1;
+  float vit_gauche = 0.1;
+  float DISTANCEd = 0.40;
+  float DISTANCEg = 0.40;
 
   const float Kp = 0.000046875; float Ki = Kp/5; //facteurs de correction a modifier selon comportement
   //augmenter si correction trop petite et vice-versa tout en respectant le plus possible la relation Kp = 5Ki
@@ -75,6 +126,10 @@ void asservissement(float vit_droite, float vit_gauche, float const DISTANCEd, f
 
     delay(10);// Delais pour décharger le CPU
     int i = 0;
+    if (chargeur == 0){
+      arret_chargeur();
+      chargeur = 27;
+    }
 
     while (i < 5){
       ENCODER_ReadReset(RIGHT); ENCODER_ReadReset(LEFT);
@@ -103,28 +158,26 @@ void asservissement(float vit_droite, float vit_gauche, float const DISTANCEd, f
 
     MOTOR_SetSpeed(RIGHT, 0); MOTOR_SetSpeed(LEFT, 0);
     nb_dominos_place++;
+    chargeur -= 1;
 
     Serial.print(dist_roue_gauche); Serial.print('/'); Serial.println(dist_roue_droite);
 
     delay(DUREE_DOMINOS_DROP);
     PlacerDomino();
   }
+  return chargeur;
 }
 
-void ligne_droite(){ 
- asservissement(0.1, 0.112, 0.40, 0.40, 27);
+void tourner_droite(){
 }
 
-void tourner_90(int sens){
-  if (sens == RIGHT)
-  {
-    asservissement(0.05, 0.1, 0.50, 2.00, 15);
-  }
+void tourner_gauche(){
+}
 
-  if (sens == LEFT)
-  {
-    asservissement(0.1, 0.05, 2.00, 0.50, 15);
-  }
+void spirale(){
+}
+
+void spirale_carre(){
 }
 
 void tourner90(){
@@ -136,71 +189,39 @@ void tourner90(){
   PlacerDomino();
 }
 
-int bouton_parcours(int bouton, int del){     //fonction avec debouncing et dels
-  if (digitalRead(bouton)== 1){
-    delay(50);         //debouncing
-    if (digitalRead(bouton)== 1){
-      Serial.println(bouton);
-      digitalWrite(del, HIGH);      //allume la del associée pour indiquer la sauvegarde du choix
-      while (digitalRead(bouton) == 1){   //pour que ca le prenne juste une fois le choix même si on tiens le bouton
-      }
-      delay(200);                         // si la del s'allume pas, le choix n'est pas enregistré
-      digitalWrite(del, LOW);
-      return 1;                   //// le choix est enregistré et l'utilisateur comprend
-    }
-    if (digitalRead(bouton)==0){
-      return 0;
-    }
-  }
-}
 
 void flash_go(int del){        //ca fait juste flasher la del pour avertir l'utilisateur que le robot va avancer
-  int del_choix;
-  if (del==1){
-    del_choix = del_ligne;
-  }
-  if (del==2){
-    del_choix = del_droite;
-  }
-  if (del==3){
-    del_choix = del_gauche;
-  }
-  if (del==4){
-    del_choix = del_spirale;
-  }
-  if (del==5){
-    del_choix = del_carre;
-  }
-  digitalWrite(del_choix, HIGH);
+  digitalWrite(del, HIGH);
   delay(400);
-  digitalWrite(del_choix, LOW);
+  digitalWrite(del, LOW);
   delay(200);
 }
 
-/*void parcours(int deplacement[6]){    // fonction qui fait le parcours inventé par l'utilisateur
+void parcours(int deplacement[6]){    // fonction qui fait le parcours inventé par l'utilisateur
   int x = 0;
   int d = 27; // nombre de dominos dans le chargeur
   while (x<5){        // un maximum de 5 déplacements de suite
     if (deplacement[x] == 0)
       x=5;
-    if (deplacement[x] == 1){
-      ligne_droite(20);
+    if (deplacement[x] == del_ligne){
+      d = ligne_droite(2, d);
+      Serial.println(d);
     }
-    if (deplacement[x] == 2){
+    if (deplacement[x] == del_droite){
       tourner_droite();
     }
-    if (deplacement[x] == 3){
+    if (deplacement[x] == del_gauche){
       tourner_gauche();
     }
-    if (deplacement[x] == 4){
+    if (deplacement[x] == del_spirale){
       spirale();
     }
-    if (deplacement[x] == 5){
+    if (deplacement[x] == del_carre){
       spirale_carre();
     }
     x++;
   }
-}*/
+}
 
 
 
@@ -224,58 +245,59 @@ void loop(){
   int x = 0;      //pour le maximum de 5 entrées
   int deplacement[6]={0,0,0,0,0};   //pour garder en note le parcours choisi
   int v = 0;
-  int actif = 0;    //est-ce que la del s'est allum et le choix du bouton bien enregistré?
+  int actif = 0;    //est-ce que la del s'est allumé et le choix du bouton bien enregistré?
   if (digitalRead(bouton_go) == 1) {
     actif = bouton_parcours(bouton_go, del_go);   //debouncing + del
-    if (actif == 1){      //debouncing
+    if (actif == del_go){      //debouncing
     actif = 0;            //pour etre certain que ca saute pas d'étape plus tard
     while (v == 0){       //pour reinitialiser le parcours et le tableau
       while (x<5){          // un maximum de 5 déplacements de suite
         if (x == 0){        // on ne peut pas rajouter des parcours lorsqu'on choisi les spirales
           if (digitalRead(bouton_spirale) == 1) {
           actif = bouton_parcours(bouton_spirale, del_spirale);
-          if (actif ==1){
+          if (actif ==del_spirale){
             actif = 0;
-            deplacement[x] = 4;
+            deplacement[x] = del_spirale;
             x = 5;    //sortir de la boucle
             }
           }
           if (digitalRead(bouton_Scarree) == 1) {
             actif =bouton_parcours(bouton_Scarree, del_carre);
-            if (actif == 1){
+            if (actif == del_carre){
               actif = 0;
-              deplacement[x] = 5;
+              deplacement[x] = del_carre;
               x = 5;    //sortir de la boucle
             }
           }
         }
         if (digitalRead(bouton_ligne) == 1) {
           actif = bouton_parcours(bouton_ligne, del_ligne);
-          if (actif == 1){
+          if (actif == del_ligne){
+            Serial.println("enregistré");
             actif = 0;
-            deplacement[x] = 1;
+            deplacement[x] = del_ligne;
             x += 1;
           }
         }
         if (digitalRead(bouton_droite) == 1) {
           actif = bouton_parcours(bouton_droite, del_droite);
-          if (actif == 1){  
+          if (actif == del_droite){  
             actif = 0;
-            deplacement[x] = 2;
+            deplacement[x] = del_droite;
             x += 1;
           }
         }
         if (digitalRead(bouton_gauche) == 1) {
           actif = bouton_parcours(bouton_gauche, del_gauche);
-          if (actif ==1){  
+          if (actif == del_gauche){  
             actif = 0;
-            deplacement[x] = 3;
+            deplacement[x] = del_gauche;
             x += 1;
           }
         }
         if (digitalRead(bouton_go) == 1){       // pour commencer le parcours avec moins de 5 déplacements
           actif = bouton_parcours(bouton_go, del_go);
-          if (actif == 1){
+          if (actif == del_go){
             actif = 0;
             int y = 0;
             delay(500);
@@ -289,7 +311,7 @@ void loop(){
             }
             delay(1000);
 
-            //parcours(deplacement)
+            parcours(deplacement);
 
             Serial.println("parcours fini");
             x = 5;      /// sors de la boucle
@@ -299,7 +321,7 @@ void loop(){
       }
       if (deplacement[0] != 0 && digitalRead(bouton_go) == 1){ // pour commencer le parcours avec 5 déplacements ou 1 complexe
         actif = bouton_parcours(bouton_go, del_go);
-        if (actif ==1){
+        if (actif == del_go){
           actif = 0;
           int y = 0;
           while (y<5){              // écrit les données dans le tableau
@@ -311,7 +333,7 @@ void loop(){
           }
           delay(1000);
 
-          //parcours(deplacement)
+          parcours(deplacement);
 
           Serial.println("parcours fini");
           v = 1; //pour recommencer au complet
@@ -321,3 +343,4 @@ void loop(){
     }
   }
 }
+
